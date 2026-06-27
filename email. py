@@ -1,0 +1,64 @@
+import pandas as pd
+import re
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.pipeline import Pipeline
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+
+# Load dataset
+# CSV must contain:
+# text  -> email content
+# label -> phishing or safe
+data = pd.read_csv("emails.csv")
+
+# Clean text
+def clean_text(text):
+    text = str(text).lower()
+    text = re.sub(r"http\S+|www\S+", " URL ", text)
+    text = re.sub(r"[^a-zA-Z ]", " ", text)
+    return text
+
+data["text"] = data["text"].apply(clean_text)
+
+X = data["text"]
+y = data["label"]
+
+# Split dataset
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+# Build model
+model = Pipeline([
+    ("tfidf", TfidfVectorizer(stop_words="english")),
+    ("classifier", MultinomialNB())
+])
+
+# Train
+model.fit(X_train, y_train)
+
+# Predict
+predictions = model.predict(X_test)
+
+# Accuracy
+print("Accuracy:", accuracy_score(y_test, predictions))
+
+# Confusion Matrix
+print("\nConfusion Matrix")
+print(confusion_matrix(y_test, predictions))
+
+# Classification Report
+print("\nClassification Report")
+print(classification_report(y_test, predictions))
+
+# Test custom email
+while True:
+    email = input("\nEnter email text (or type exit): ")
+
+    if email.lower() == "exit":
+        break
+
+    result = model.predict([clean_text(email)])[0]
+
+    print("Prediction:", result)
