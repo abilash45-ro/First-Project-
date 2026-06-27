@@ -1,0 +1,97 @@
+import socket
+import sys
+from datetime import datetime
+
+# Define target (Use 'localhost' or '127.0.0.1' for safe testing)
+TARGET = "127.0.0.1"
+
+# Define common ports to scan and their expected common services
+PORTS_TO_SCAN = {
+    21: "FTP",
+    22: "SSH",
+    23: "Telnet",
+    80: "HTTP",
+    443: "HTTPS"
+}
+
+# Simulated database of outdated/vulnerable software versions for demonstration
+VULNERABLE_BANNERS = [
+    "SSH-1.99-OpenSSH_2.9", 
+    "Apache/2.2.15", 
+    "vsFTPd 2.3.4"
+]
+
+def scan_ports(target):
+    print(f"Starting scan on target: {target}")
+    print(f"Time started: {str(datetime.now())}")
+    print("-" * 50)
+    
+    open_ports = []
+    vulnerabilities = []
+
+    for port, service in PORTS_TO_SCAN.items():
+        # Create a socket object
+        # AF_INET specifies IPv4, SOCK_STREAM specifies TCP
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(1.0) # 1 second timeout so it doesn't hang
+        
+        # Attempt to connect to the port
+        result = s.connect_ex((target, port))
+        
+        if result == 0:
+            open_ports.append((port, service))
+            print(f"[+] Port {port} ({service}) is OPEN")
+            
+            # Try to grab the service banner/version details
+            try:
+                # Send a minor request to trigger a response if needed, or just receive
+                s.send(b"HEAD / HTTP/1.1\r\n\r\n")
+                banner = s.recv(1024).decode('utf-8', errors='ignore').strip()
+                
+                if banner:
+                    print(f"   └── Banner Grabbed: {banner[:50]}")
+                    # Check if the software version is outdated/vulnerable
+                    for vuln in VULNERABLE_BANNERS:
+                        if vuln.lower() in banner.lower():
+                            vulnerabilities.append(f"Port {port}: Running outdated/vulnerable software version ({vuln})")
+            except:
+                # Banner grabbing failed or timed out, which is common depending on the service
+                pass
+        s.close()
+        
+    return open_ports, vulnerabilities
+
+def generate_report(target, open_ports, vulnerabilities):
+    filename = "vulnerability_report.txt"
+    with open(filename, "w") as report:
+        report.write("=" * 50 + "\n")
+        report.write(f"VULNERABILITY ASSESSMENT REPORT\n")
+        report.write("=" * 50 + "\n")
+        report.write(f"Target Scanned : {target}\n")
+        report.write(f"Scan Date      : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        report.write("-" * 50 + "\n\n")
+        
+        report.write("1. OPEN PORTS & CONFIGURATIONS:\n")
+        if open_ports:
+            for port, service in open_ports:
+                report.write(f" [OPEN] Port: {port} | Service: {service}\n")
+        else:
+            report.write(" No open ports detected in the scanned range.\n")
+            
+        report.write("\n2. DETECTED SOFTWARE VULNERABILITIES:\n")
+        if vulnerabilities:
+            for vuln in vulnerabilities:
+                report.write(f" [WARNING] {vuln}\n")
+        else:
+            report.write(" [INFO] No known outdated software versions flagged from banners.\n")
+            
+        report.write("\n" + "=" * 50 + "\n")
+        report.write("Report Generated Successfully.\n")
+        
+    print("-" * 50)
+    print(f"[#] Scan complete. Report saved to '{filename}'")
+
+if __name__ == "__main__":
+    # Run the scanner
+    open_p, vulns = scan_ports(TARGET)
+    generate_report(TARGET, open_p, vulns)
