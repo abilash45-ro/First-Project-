@@ -1,0 +1,116 @@
+from flask import Flask, request, redirect, session, render_template_string
+from flask_bcrypt import Bcrypt
+import sqlite3
+import re
+
+app = Flask(__name__)
+app.secret_key = "secret_key"
+
+bcrypt = Bcrypt(app)
+
+conn = sqlite3.connect("users.db")
+cur = conn.cursor()
+cur.execute("""
+CREATE TABLE IF NOT EXISTS users(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE,
+    password TEXT
+)
+""")
+conn.commit()
+conn.close()
+
+register_page = """
+<h2>Register</h2>
+<form method="POST">
+<input type="text" name="username" placeholder="Username" required><br><br>
+<input type="password" name="password" placeholder="Password" required><br><br>
+<input type="submit" value="Register">
+</form>
+<a href="/login">Login</a>
+"""
+
+login_page = """
+<h2>Login</h2>
+<form method="POST">
+<input type="text" name="username" placeholder="Username" required><br><br>
+<input type="password" name="password" placeholder="Password" required><br><br>
+<input type="submit" value="Login">
+</form>
+<a href="/register">Register</a>
+"""
+
+dashboard_page = """
+<h2>Welcome {{user}}</h2>
+<a href="/logout">Logout</a>
+"""
+
+@app.route("/")
+def home():
+    return redirect("/login")
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        username = request.form["username"].strip()
+        password = request.form["password"]
+
+        if not re.match(r"^[A-Za-z0-9_]{4,20}$", username):
+            return "Invalid Username"
+
+        if len(password) < 6:
+            return "Password must be at least 6 characters"
+
+        hashed = bcrypt.generate_password_hash(password).decode("utf-8")
+
+        try:
+            conn = sqlite3.connect("users.db")
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO users(username,password) VALUES(?,?)",
+                (username, hashed)
+            )
+            conn.commit()
+            conn.close()
+            return redirect("/login")
+        except:
+            return "Username already exists"
+
+    return render_template_string(register_page)
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form["username"]
+        password = request.form["password"]
+
+        conn = sqlite3.connect("users.db")
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT password FROM users WHERE username=?",
+            (username,)
+        )
+        user = cur.fetchone()
+        conn.close()
+
+        if user and bcrypt.check_password_hash(user[0], password):
+            session["user"] = username
+            return redirect("/dashboard")
+
+        return "Invalid Username or Password"
+
+    return render_template_string(login_page)
+
+@app.route("/dashboard")
+def dashboard():
+    if "user" not in session:
+        return redirect("/login")
+    return render_template_string(dashboard_page, user=session["user"])
+
+@app.route("/logout")
+def logout():
+    session.pop("user", None)
+    return redirect("/login")
+
+if __name__ == "__main__":
+    app.run(debug=True)
