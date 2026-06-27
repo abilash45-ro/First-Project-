@@ -1,0 +1,138 @@
+import string
+import secrets
+import tkinter as tk
+from tkinter import messagebox, ttk
+
+# --- CORE LOGIC ---
+
+def analyze_password(password):
+    """Evaluates the strength of a password and returns a score, feedback, and color."""
+    score = 0
+    feedback = []
+    
+    if not password:
+        return 0, ["Please enter a password."], "gray"
+
+    # 1. Length Check
+    length = len(password)
+    if length >= 12:
+        score += 2
+    elif length >= 8:
+        score += 1
+    else:
+        feedback.append("• Too short (aim for at least 8-12 characters).")
+
+    # 2. Complexity Checks
+    has_upper = any(c.isupper() for c in password)
+    has_lower = any(c.islower() for c in password)
+    has_digit = any(c.isdigit() for c in password)
+    has_special = any(c in string.punctuation for c in password)
+
+    if has_upper: score += 1
+    else: feedback.append("• Missing uppercase letters (A-Z).")
+        
+    if has_lower: score += 1
+    else: feedback.append("• Missing lowercase letters (a-z).")
+        
+    if has_digit: score += 1
+    else: feedback.append("• Missing numbers (0-9).")
+        
+    if has_special: score += 1
+    else: feedback.append("• Missing special characters (e.g., !, @, #, $).")
+
+    # 3. Uniqueness / Common Pattern Check
+    # Basic check for sequential characters (e.g., "123", "abc")
+    lowered_pwd = password.lower()
+    sequential = False
+    for i in range(len(lowered_pwd) - 2):
+        chunk = lowered_pwd[i:i+3]
+        if chunk in string.digits or chunk in string.ascii_lowercase:
+            sequential = True
+            break
+            
+    if sequential:
+        score = max(0, score - 1)
+        feedback.append("• Avoid predictable sequential patterns (like '123' or 'abc').")
+
+    # Determine Rating based on total score (Max achievable: 6)
+    if score >= 5:
+        return score, ["Strong password! Great job."], "#2ecc71"  # Green
+    elif score >= 3:
+        return score, ["Moderate password. " + " ".join(feedback)], "#f1c40f"  # Yellow
+    else:
+        return score, ["Weak password! " + " ".join(feedback)], "#e74c3c"  # Red
+
+
+def generate_strong_alternative():
+    """Generates a secure, random 14-character password alternative."""
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+    while True:
+        password = ''.join(secrets.choice(alphabet) for _ in range(14))
+        # Ensure it meets strong criteria before returning
+        if (any(c.isupper() for c in password)
+            and any(c.islower() for c in password)
+            and any(c.isdigit() for c in password)
+            and any(c in "!@#$%^&*" for c in password)):
+            return password
+
+# --- GUI INTERACTION ---
+
+def check_strength():
+    password = password_entry.get()
+    score, feedback_list, color = analyze_password(password)
+    
+    # Update progress bar and label text
+    progress_var.set(score)
+    result_label.config(text="\n".join(feedback_list), fg=color)
+    
+    # Update progress bar color style dynamically
+    style.configure("Colored.Horizontal.TProgressbar", background=color)
+
+def suggest_password():
+    suggestion = generate_strong_alternative()
+    suggestion_entry.delete(0, tk.END)
+    suggestion_entry.insert(0, suggestion)
+
+# --- GUI SETUP ---
+
+root = tk.Tk()
+root.title("Password Strength Analyzer")
+root.geometry("450x450")
+root.config(bg="#f5f6fa")
+
+style = ttk.Style()
+style.theme_use('default')
+style.configure("Colored.Horizontal.TProgressbar", thickness=15)
+
+# UI Widgets
+title_label = tk.Label(root, text="Password Strength Analyzer", font=("Helvetica", 16, "bold"), bg="#f5f6fa", fg="#2c3e50")
+title_label.pack(pady=15)
+
+input_frame = tk.LabelFrame(root, text=" Enter Password ", font=("Helvetica", 10), bg="#f5f6fa", padx=10, pady=10)
+input_frame.pack(padx=20, fill="x")
+
+password_entry = tk.Entry(input_frame, font=("Helvetica", 12), show="*")
+password_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
+
+check_btn = tk.Button(input_frame, text="Analyze", font=("Helvetica", 10, "bold"), bg="#3498db", fg="white", command=check_strength)
+check_btn.pack(side="right")
+
+# Visual feedback elements
+progress_var = tk.IntVar()
+progress_bar = ttk.Progressbar(root, orient="horizontal", length=300, mode="determinate", maximum=6, variable=progress_var, style="Colored.Horizontal.TProgressbar")
+progress_bar.pack(pady=15)
+
+result_label = tk.Label(root, text="Enter a password to test its strength.", font=("Helvetica", 10, "italic"), bg="#f5f6fa", fg="#7f8c8d", wraplength=400, justify="left")
+result_label.pack(pady=5, padx=20)
+
+# Alternative generation section
+suggest_frame = tk.LabelFrame(root, text=" Secure Alternative Generator ", font=("Helvetica", 10), bg="#f5f6fa", padx=10, pady=10)
+suggest_frame.pack(padx=20, pady=20, fill="x")
+
+suggest_btn = tk.Button(suggest_frame, text="Generate Suggestion", font=("Helvetica", 10, "bold"), bg="#2ecc71", fg="white", command=suggest_password)
+suggest_btn.pack(fill="x", pady=(0, 10))
+
+suggestion_entry = tk.Entry(suggest_frame, font=("Helvetica", 12, "bold"), justify="center")
+suggestion_entry.pack(fill="x")
+
+root.mainloop()
